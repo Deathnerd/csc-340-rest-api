@@ -37,6 +37,15 @@ class Task(db.Model):
         self.description = description
         self.notes = notes
 
+    def serialize(self):
+        return {
+            "id": self.id,
+            "notes": self.notes,
+            "description": self.description,
+            "subtasks": [subtask.serialize() for subtask in self.subtasks],
+            "time_entries": [entry.serialize() for entry in self.time_entries]
+        }
+
 
 class TimeEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -51,21 +60,24 @@ class TimeEntry(db.Model):
     def stop(self):
         self.end = datetime.now()
 
-
-@app.route('/')
-def hello_world():
-    return 'Hello World!'
+    def serialize(self):
+        return {
+            "id": self.id,
+            "task_id": self.task_id,
+            "start": self.start,
+            "end": self.end
+        }
 
 
 @app.route('/task/all', methods=["GET"])
 def get_all_tasks():
-    return jsonify(Task.query.all())
+    return jsonify(task.serialize() for task in Task.query.all())
 
 
 @app.route('/task/<int:id>', methods=["GET"])
 def get_task_by_id(id):
     task = Task.query.get_or_404(id)
-    return jsonify(task)
+    return jsonify(task.serialize())
 
 
 @app.route('/task', methods=["POST"])
@@ -85,7 +97,15 @@ def post_single_task():
     db.session.add(new_task)
     db.session.commit()
 
-    return jsonify(new_task)
+    return jsonify(new_task.serialize())
+
+
+@app.route('/task/<int:id>', methods=["DELETE"])
+def delete_task(id):
+    task = Task.query.get_or_404(id)
+    db.session.delete(task)
+    db.session.commit()
+    return jsonify(message="Task {} deleted".format(id), success=True)
 
 
 @app.route('/task/<int:id>', methods=["PATCH"])
@@ -97,32 +117,33 @@ def update_single_task(id):
     if j.get('description', None) is None:
         return jsonify(error="Description required for all Task objects"), 400
 
-    task.parent_task_id = j.get("parent_task_id", None)
     task.description = j.get("description", "")
     task.notes = j.get("notes", None)
 
     db.session.add(task)
     db.session.commit()
 
-    return jsonify(task)
+    return jsonify(task.serialize())
 
 
 @app.route('/task/running', methods=["GET"])
 def get_started_tasks():
     running_time_entries = TimeEntry.query.filter_by(end=None).all()
-    return jsonify(Task.query.filter(Task.id.in_(t.id for t in running_time_entries)).all())
+    return jsonify(
+        task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in running_time_entries)).all())
 
 
 @app.route('/task/stopped', methods=["GET"])
 def get_stopped_tasks():
     stopped_time_entries = TimeEntry.query.filter(TimeEntry.end.isnot(None)).all()
-    return jsonify(Task.query.filter(Task.id.in_(t.id for t in stopped_time_entries)).all())
+    return jsonify(
+        task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in stopped_time_entries)).all())
 
 
 @app.route('/task/<int:id>/timeentries', methods=["GET"])
 def get_time_entries_for_task(id):
     task = Task.query.get_or_404(id)
-    return jsonify(task.time_entries)
+    return jsonify(entry.serialize() for entry in task.time_entries)
 
 
 @app.route('/task/<int:id>/start', methods=["POST"])
@@ -135,7 +156,7 @@ def start_new_time_entry_for_task(id):
     db.session.add(task)
     db.session.add(time_entry)
     db.session.commit()
-    return jsonify(time_entry)
+    return jsonify(time_entry.serialize())
 
 
 @app.route('/task/<int:id>/stop', methods=["POST"])
@@ -147,40 +168,50 @@ def stop_task(id):
     last_time_entry.stop()
     db.session.add(task)
     db.session.commit()
-    return jsonify(last_time_entry)
+    return jsonify(last_time_entry.serialize())
 
 
 @app.route('/timeentry/<int:id>', methods=["GET"])
 def get_single_time_entry(id):
     time_entry = TimeEntry.query.get_or_404(id)
-    return jsonify(time_entry)
+    return jsonify(time_entry.serialize())
+
+
+@app.route("/timeentry/<int:id>", methods=["DELETE"])
+def delete_time_entry(id):
+    time_entry = TimeEntry.query.get_or_404(id)
+    db.session.delete(time_entry)
+    db.session.commit()
+    return jsonify(message="Time Entry {} removed successfully".format(id), success=True)
 
 
 @app.route('/timeentry/<int:id>/task', methods=['GET'])
 def get_task_for_time_entry(id):
     time_entry = TimeEntry.query.get_or_404(id)
     task = Task.query.get_or_404(time_entry.task_id)
-    return jsonify(task)
+    return jsonify(task.serialize())
 
 
 @app.route('/timeentry/stopped', methods=['GET'])
 def get_stopped_time_entries():
-    return jsonify(TimeEntry.query.filter(TimeEntry.end.isnot(None)).all())
+    return jsonify(entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.isnot(None)).all())
 
 
 @app.route('/timeentry/stopped/<int:task_id>', methods=["GET"])
 def get_stopped_time_entries_for_task(task_id):
-    return jsonify(TimeEntry.query.filter(TimeEntry.end.isnot(None) and TimeEntry.task_id == task_id).all())
+    return jsonify(entry.serialize() for entry in
+                   TimeEntry.query.filter(TimeEntry.end.isnot(None) and TimeEntry.task_id == task_id).all())
 
 
 @app.route('/timeentry/running', methods=['GET'])
 def get_running_time_entries():
-    return jsonify(TimeEntry.query.filter(TimeEntry.end.is_(None)).all())
+    return jsonify(entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.is_(None)).all())
 
 
 @app.route('/timeentry/running/<int:task_id>', methods=['GET'])
-def get_running_time_entries(task_id):
-    return jsonify(TimeEntry.query.filter(TimeEntry.end.is_(None) and TimeEntry.task_id == task_id).all())
+def get_running_time_entries_for_task(task_id):
+    return jsonify(entry.serialize() for entry in
+                   TimeEntry.query.filter(TimeEntry.end.is_(None) and TimeEntry.task_id == task_id).all())
 
 
 @app.route('/timeentry/<int:id>/stop', methods=["POST"])
@@ -189,7 +220,7 @@ def stop_time_entry_by_id(id):
     time_entry.stop()
     db.session.add(time_entry)
     db.session.commit()
-    return jsonify(time_entry)
+    return jsonify(time_entry.serialize())
 
 
 @app.route('/timeentry/<int:id>/start/<int:timestamp>', methods=["PATCH"])
@@ -198,7 +229,7 @@ def update_start_of_time_entry(id, timestamp):
     time_entry.start = datetime.fromtimestamp(timestamp)
     db.session.add(time_entry)
     db.session.commit()
-    return jsonify(time_entry)
+    return jsonify(time_entry.serialize())
 
 
 @app.route('/timeentry/<int:id>/end/<int:timestamp>', methods=["PATCH"])
@@ -207,8 +238,8 @@ def update_end_of_time_entry(id, timestamp):
     time_entry.end = datetime.fromtimestamp(timestamp)
     db.session.add(time_entry)
     db.session.commit()
-    return jsonify(time_entry)
+    return jsonify(time_entry.serialize())
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True, port=9000)
