@@ -71,7 +71,7 @@ class TimeEntry(db.Model):
 
 @app.route('/task/all', methods=["GET"])
 def get_all_tasks():
-    return jsonify(task.serialize() for task in Task.query.all())
+    return jsonify([task.serialize() for task in Task.query.all()])
 
 
 @app.route('/task/<int:id>', methods=["GET"])
@@ -130,20 +130,20 @@ def update_single_task(id):
 def get_started_tasks():
     running_time_entries = TimeEntry.query.filter_by(end=None).all()
     return jsonify(
-        task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in running_time_entries)).all())
+        [task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in running_time_entries)).all()])
 
 
 @app.route('/task/stopped', methods=["GET"])
 def get_stopped_tasks():
     stopped_time_entries = TimeEntry.query.filter(TimeEntry.end.isnot(None)).all()
     return jsonify(
-        task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in stopped_time_entries)).all())
+        [task.serialize() for task in Task.query.filter(Task.id.in_(t.id for t in stopped_time_entries)).all()])
 
 
 @app.route('/task/<int:id>/timeentries', methods=["GET"])
 def get_time_entries_for_task(id):
     task = Task.query.get_or_404(id)
-    return jsonify(entry.serialize() for entry in task.time_entries)
+    return jsonify([entry.serialize() for entry in task.time_entries])
 
 
 @app.route('/task/<int:id>/start', methods=["POST"])
@@ -194,24 +194,24 @@ def get_task_for_time_entry(id):
 
 @app.route('/timeentry/stopped', methods=['GET'])
 def get_stopped_time_entries():
-    return jsonify(entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.isnot(None)).all())
+    return jsonify([entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.isnot(None)).all()])
 
 
 @app.route('/timeentry/stopped/<int:task_id>', methods=["GET"])
 def get_stopped_time_entries_for_task(task_id):
-    return jsonify(entry.serialize() for entry in
-                   TimeEntry.query.filter(TimeEntry.end.isnot(None) and TimeEntry.task_id == task_id).all())
+    return jsonify([entry.serialize() for entry in
+                   TimeEntry.query.filter(TimeEntry.end.isnot(None) and TimeEntry.task_id == task_id).all()])
 
 
 @app.route('/timeentry/running', methods=['GET'])
 def get_running_time_entries():
-    return jsonify(entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.is_(None)).all())
+    return jsonify([entry.serialize() for entry in TimeEntry.query.filter(TimeEntry.end.is_(None)).all()])
 
 
 @app.route('/timeentry/running/<int:task_id>', methods=['GET'])
 def get_running_time_entries_for_task(task_id):
-    return jsonify(entry.serialize() for entry in
-                   TimeEntry.query.filter(TimeEntry.end.is_(None) and TimeEntry.task_id == task_id).all())
+    return jsonify([entry.serialize() for entry in
+                   TimeEntry.query.filter(TimeEntry.end.is_(None) and TimeEntry.task_id == task_id).all()])
 
 
 @app.route('/timeentry/<int:id>/stop', methods=["POST"])
